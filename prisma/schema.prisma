@@ -48,3 +48,17 @@ enum Platform {
   YOUTUBE
   TWITTER
 }
+
+// ============================================================================
+// Cross-Service Cache Models (event-synced, read-only)
+// ============================================================================
+
+model CampaignCache {
+  id        String   @id            // Same ID as in campaign-service
+  title     String
+  status    String
+  syncedAt  DateTime @default(now())
+
+  @@index([status])
+  @@index([syncedAt])
+}

@@ -12,7 +12,8 @@ import type { EventConsumer } from '@clipdeck/events';
 import { config } from '../config';
 import { logger } from '../lib/logger';
 import { refreshClipStats } from '../services/statsCollector';
-import axios from 'axios';
+import { clipClient } from '../lib/serviceClients';
+import { syncCampaignCache } from '../services/cacheService';
 
 let consumer: EventConsumer | null = null;
 
@@ -25,7 +26,7 @@ export async function startEventHandlers(): Promise<void> {
     connectionUrl: config.rabbitmqUrl,
     queueName: 'statistics.events',
     exchange: config.eventExchange,
-    routingKeys: ['clip.submitted', 'clip.approved', 'stats.requested'],
+    routingKeys: ['clip.submitted', 'clip.approved', 'stats.requested', 'campaign.created', 'campaign.status_changed'],
     prefetchCount: 10,
     enableDeadLetterQueue: true,
     maxRetries: 3,
@@ -45,7 +46,7 @@ export async function startEventHandlers(): Promise<void> {
     'clip.approved',
     withRetry(
       withLogging(async (event, context) => {
-        const { clipId, campaignId, userId } = event.payload;
+        const { clipId, campaignId } = event.payload;
 
         logger.info(
           { clipId, campaignId },
@@ -53,18 +54,15 @@ export async function startEventHandlers(): Promise<void> {
         );
 
         try {
-          // Fetch clip details from clip-service
-          const response = await axios.get(
-            `${config.clipServiceUrl}/clips/${clipId}`,
-            {
-              headers: {
-                'X-Internal-Service': 'statistics-service',
-              },
-              timeout: 10000,
-            }
-          );
+          if (!clipClient) {
+            logger.warn('Clip service URL not configured, skipping stats refresh');
+            await context.ack();
+            return;
+          }
 
+          const response = await clipClient.get(`/clips/${clipId}`);
           const clip = response.data;
+
           if (clip && clip.platformVideoId) {
             await refreshClipStats(clipId, clip.platform, clip.platformVideoId);
           } else {
@@ -82,7 +80,6 @@ export async function startEventHandlers(): Promise<void> {
 
   /**
    * Handle clip.submitted events
-   * Log the submission for tracking purposes.
    */
   consumer.on(
     'clip.submitted',
@@ -95,6 +92,40 @@ export async function startEventHandlers(): Promise<void> {
           'Clip submitted - registered for future stats tracking'
         );
 
+        await context.ack();
+      }, { info: (msg: string, data?: unknown) => logger.info(data, msg) })
+    )
+  );
+
+  /**
+   * Handle campaign.created - cache campaign data
+   */
+  consumer.on(
+    'campaign.created',
+    withRetry(
+      withLogging(async (event, context) => {
+        const { campaignId, title } = event.payload;
+
+        await syncCampaignCache(campaignId, { title, status: 'ACTIVE' });
+
+        logger.info({ campaignId, title }, 'Campaign created - cached');
+        await context.ack();
+      }, { info: (msg: string, data?: unknown) => logger.info(data, msg) })
+    )
+  );
+
+  /**
+   * Handle campaign.status_changed - update cache
+   */
+  consumer.on(
+    'campaign.status_changed',
+    withRetry(
+      withLogging(async (event, context) => {
+        const { campaignId, newStatus } = event.payload;
+
+        await syncCampaignCache(campaignId, { status: newStatus });
+
+        logger.debug({ campaignId, newStatus }, 'Campaign status changed - cache synced');
         await context.ack();
       }, { info: (msg: string, data?: unknown) => logger.info(data, msg) })
     )

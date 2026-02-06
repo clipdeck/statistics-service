@@ -38,12 +38,12 @@ spec:
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
-                  name: clipdeck-db-credentials
+                  name: clipdeck-db-statistics
                   key: POOLED_URL
             - name: DIRECT_URL
               valueFrom:
                 secretKeyRef:
-                  name: clipdeck-db-credentials
+                  name: clipdeck-db-statistics
                   key: DIRECT_URL
             - name: JWT_SECRET
               valueFrom:
@@ -69,6 +69,8 @@ spec:
               value: "clipdeck.events"
             - name: CLIP_SERVICE_URL
               value: "http://clip-service.clipdeck.svc.cluster.local:3002"
+            - name: CAMPAIGN_SERVICE_URL
+              value: "http://campaign-service.clipdeck.svc.cluster.local:3001"
             - name: ALLOWED_ORIGINS
               value: "https://clipdeck.com,https://www.clipdeck.com"
           livenessProbe:

@@ -17,6 +17,7 @@ const envSchema = z.object({
 
   YOUTUBE_API_KEY: z.string().optional(),
   CLIP_SERVICE_URL: z.string().url().default('http://localhost:3002'),
+  CAMPAIGN_SERVICE_URL: z.string().url().optional(),
 
   ALLOWED_ORIGINS: z.string().default('http://localhost:3000'),
 });
@@ -41,6 +42,7 @@ export const config = {
   jwtSecret: parsed.data.JWT_SECRET,
   youtubeApiKey: parsed.data.YOUTUBE_API_KEY,
   clipServiceUrl: parsed.data.CLIP_SERVICE_URL,
+  campaignServiceUrl: parsed.data.CAMPAIGN_SERVICE_URL,
   allowedOrigins: parsed.data.ALLOWED_ORIGINS.split(',').map((s) => s.trim()),
   isDev: parsed.data.NODE_ENV === 'development',
   isProd: parsed.data.NODE_ENV === 'production',
